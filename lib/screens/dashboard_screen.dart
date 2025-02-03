@@ -1,8 +1,11 @@
+// lib/screens/dashboard_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // For Clipboard functionality
+import 'package:shared_preferences/shared_preferences.dart';
 import 'name_shadow_screen.dart';
 import 'settings_screen.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'document_screen.dart'; // Adjust the path based on your file structure
+import '../widgets/join_shadow_dialog.dart'; // Import the join shadow dialog
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -38,7 +41,9 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _saveShadows() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    List<String> shadowList = shadows.map((s) => '${s['id']}|${s['name']}|${s['template']}').toList();
+    List<String> shadowList = shadows
+        .map((s) => '${s['id']}|${s['name']}|${s['template']}')
+        .toList();
     await prefs.setStringList('shadows', shadowList);
   }
 
@@ -47,7 +52,8 @@ class DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       appBar: AppBar(
         title: GestureDetector(
-          onTap: () => Navigator.popUntil(context, ModalRoute.withName('/dashboard')),
+          onTap: () =>
+              Navigator.popUntil(context, ModalRoute.withName('/dashboard')),
           child: const Text('ShadowDocs'),
         ),
         actions: [
@@ -56,24 +62,26 @@ class DashboardScreenState extends State<DashboardScreen> {
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => SettingsScreen(
-                ),
+                builder: (context) => const SettingsScreen(),
               ),
             ),
           ),
         ],
       ),
       body: _buildMainContent(),
-      floatingActionButton: isSharingMode ? _buildShareButton() : FloatingActionButton(
-        onPressed: _showActionOptions,
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: isSharingMode
+          ? _buildShareButton()
+          : FloatingActionButton(
+              onPressed: _showActionOptions,
+              child: const Icon(Icons.add),
+            ),
     );
   }
 
   Widget _buildMainContent() {
     if (shadows.isEmpty) {
-      return const Center(child: Text('No Shadows Yet', style: TextStyle(fontSize: 18)));
+      return const Center(
+          child: Text('No Shadows Yet', style: TextStyle(fontSize: 18)));
     }
     return Stack(
       children: [
@@ -84,31 +92,31 @@ class DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildShadowList() {
-  return ListView.builder(
-    itemCount: shadows.length,
-    itemBuilder: (context, index) => isSharingMode
-        ? CheckboxListTile(
-            title: Text(shadows[index]['name']!),
-            value: selectedShadows[index],
-            onChanged: (value) => setState(() => selectedShadows[index] = value!),
-          )
-        : ListTile(
-            title: Text(shadows[index]['name']!),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => DocumentScreen(
-                    shadowId: shadows[index]['id']!,
-                    template: shadows[index]['template']!,
+    return ListView.builder(
+      itemCount: shadows.length,
+      itemBuilder: (context, index) => isSharingMode
+          ? CheckboxListTile(
+              title: Text(shadows[index]['name']!),
+              value: selectedShadows[index],
+              onChanged: (value) =>
+                  setState(() => selectedShadows[index] = value!),
+            )
+          : ListTile(
+              title: Text(shadows[index]['name']!),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => DocumentScreen(
+                      shadowId: shadows[index]['id']!,
+                      template: shadows[index]['template']!,
+                    ),
                   ),
-                ),
-              ).then((_) => _loadShadows());
-            },
-          ),
-  );
-}
-
+                ).then((_) => _loadShadows());
+              },
+            ),
+    );
+  }
 
   void _showActionOptions() {
     showModalBottomSheet(
@@ -185,7 +193,9 @@ class DashboardScreenState extends State<DashboardScreen> {
     Navigator.pop(context);
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => NameShadowScreen(template: template)),
+      MaterialPageRoute(
+        builder: (context) => NameShadowScreen(template: template),
+      ),
     );
     if (result != null) {
       setState(() => shadows.add(result));
@@ -209,28 +219,36 @@ class DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
- void _shareSelectedShadows() {
-  final selected = <Map<String, String>>[];
-  for (int i = 0; i < shadows.length; i++) {
-    if (selectedShadows[i]) {
-      selected.add(shadows[i]);
+  void _shareSelectedShadows() {
+    final selected = <Map<String, String>>[];
+    for (int i = 0; i < shadows.length; i++) {
+      if (selectedShadows[i]) {
+        selected.add(shadows[i]);
+      }
     }
-  }
-  if (selected.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("No shadows selected")),
+    if (selected.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("No shadows selected")),
+      );
+      return;
+    }
+
+    // Generate a secure share link.
+    final link = _generateShareLink(
+      selected.map((s) => s['id']!).toList(),
     );
-    return;
+    _showShareLinkDialog(link);
+    setState(() => isSharingMode = false);
   }
 
-  final link = _generateShareLink(selected.map((s) => s['id']!).toList());
-  _showShareLinkDialog(link);
-  setState(() => isSharingMode = false);
-}
+  /// Generates a secure share link based on the selected shadow IDs.
+  String _generateShareLink(List<String> ids) {
+    // In production, generate a long secure token per shadow.
+    // For now, we simply join the IDs.
+    return "https://shadowdocs.com/join/${ids.join(',')}";
+  }
 
-
-  String _generateShareLink(List<String> ids) => "https://shadowdocs.com/share/${ids.join(',')}";
-
+  /// Shows a dialog with the share link and provides a copy button.
   void _showShareLinkDialog(String link) {
     showDialog(
       context: context,
@@ -238,6 +256,15 @@ class DashboardScreenState extends State<DashboardScreen> {
         title: const Text('Share Link'),
         content: SelectableText(link),
         actions: [
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: link));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Link copied to clipboard")),
+              );
+            },
+            child: const Text('COPY'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('CLOSE'),
@@ -247,38 +274,37 @@ class DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  /// Displays the join shadow dialog (modularized in its own widget).
   void _showJoinShadowDialog() {
-    final controller = TextEditingController();
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Join Shadow'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            hintText: 'Enter share link',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('CANCEL'),
-          ),
-          TextButton(
-            onPressed: () => _handleJoinShadow(controller.text),
-            child: const Text('JOIN'),
-          ),
-        ],
-      ),
+      builder: (context) => JoinShadowDialog(onJoin: _handleJoinShadow),
     );
   }
 
-  void _handleJoinShadow(String link) {
-    // Implement actual join logic
-    Navigator.pop(context);
+  /// Handles the join shadow action by extracting the shadow ID and adding
+  /// the new shadow to local storage.
+  void _handleJoinShadow(String shadowId) async {
+    // Check if the shadow already exists.
+    bool exists = shadows.any((s) => s['id'] == shadowId);
+    if (exists) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Shadow already joined")),
+      );
+      return;
+    }
+    // Create a new shadow entry with a default name and template.
+    final newShadow = {
+      'id': shadowId,
+      'name': 'Joined Shadow ${shadowId.substring(0, 8)}',
+      'template': 'Joined'
+    };
+    setState(() {
+      shadows.add(newShadow);
+    });
+    await _saveShadows();
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Join functionality not implemented yet")),
+      const SnackBar(content: Text("Shadow joined successfully")),
     );
   }
 }
